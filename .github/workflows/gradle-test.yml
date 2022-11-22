@@ -2,18 +2,6 @@ name: "Gradle Test"
 
 on:
   workflow_call:
-    inputs:
-      JAVA_VERSION:
-        description: 'Java version to be installed'
-        default: '18'
-        required: false
-        type: string
-
-      JAVA_DISTRO:
-        description: 'Java distribution to be installed'
-        default: 'adapt'
-        required: false
-        type: string
     secrets:
       AWS_ACCESS_KEY:
         description: 'AWS Access Key'
@@ -22,7 +10,7 @@ on:
         description: 'AWS Secret Key'
         required: true      
       AWS_REGION:
-        description: 'AWS Region for CodeArtifact'
+        description: 'AWS Region'
         required: true
       AWS_CODEARTIFACT_DOMAIN:
         description: 'AWS CodeArtifact Domain name.'
@@ -32,7 +20,7 @@ on:
         required: true
 
 jobs:
-  test:
+  gradle-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -55,8 +43,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v2
         with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRO }}
+          java-version: '18'
+          distribution: 'adapt'
 
       - name: Build with Gradle
         run: |
