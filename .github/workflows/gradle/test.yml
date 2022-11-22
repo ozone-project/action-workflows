@@ -1,0 +1,72 @@
+name: "Gradle Test"
+
+on:
+  workflow_call:
+    secrets:
+      AWS_ACCESS_KEY:
+        description: 'AWS Access Key'
+        required: true
+      AWS_SECRET_KEY:
+        description: 'AWS Secret Key'
+        required: true      
+      AWS_REGION:
+        description: 'AWS Region for CodeArtifact'
+        required: true
+      AWS_CODEARTIFACT_DOMAIN:
+        description: 'AWS CodeArtifact Domain name.'
+        required: true
+      AWS_ACCOUNT_ID:
+        description: 'AWS Account ID'
+        required: true
+      JAVA_VERSION:
+        description: 'Java version to be installed'
+        default: "18"
+      JAVA_DISTRO:
+        description: 'Java distribution to be installed'
+        default: "adapt"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: ${{ secrets.JAVA_VERSION }}
+          distribution: ${{ secrets.JAVA_DISTRO }}
+
+      - name: Build with Gradle
+        run: |
+          export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain ${{ secrets.AWS_CODEARTIFACT_DOMAIN }} --domain-owner ${{ secrets.AWS_ACCOUNT_ID }} --query authorizationToken --output text`
+          ./gradlew build
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-reports-tests
+          path: build/reports/tests/test
+
+      - name: Pretty test results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          reporter: java-junit
+          path: build/test-results/test/*.xml
+          name: Gradle Tests
