@@ -43,8 +43,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v2
         with:
-          java-version: '18'
-          distribution: 'adapt'
+          java-version: 18
+          distribution: 'adopt'
 
       - name: Build with Gradle
         run: |
