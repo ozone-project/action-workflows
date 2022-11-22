@@ -21,9 +21,12 @@ on:
       JAVA_VERSION:
         description: 'Java version to be installed'
         default: "18"
+        required: false
       JAVA_DISTRO:
         description: 'Java distribution to be installed'
         default: "adapt"
+        required: false
+        type: string
 jobs:
   test:
     runs-on: ubuntu-latest
