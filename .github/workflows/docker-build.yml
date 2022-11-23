@@ -23,7 +23,7 @@ on:
         required: true
 
 jobs:
-  docker-build:
+  build:
     runs-on: ubuntu-latest
     steps:
     - name: Check out code
