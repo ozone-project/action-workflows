@@ -1,0 +1,54 @@
+name: "Docker Build"
+
+on:
+  workflow_call:
+    secrets:
+      AWS_ACCESS_KEY:
+        description: 'AWS Access Key'
+        required: true
+      AWS_SECRET_KEY:
+        description: 'AWS Secret Key'
+        required: true      
+      AWS_REGION:
+        description: 'AWS Region'
+        required: true
+      AWS_CODEARTIFACT_DOMAIN:
+        description: 'AWS CodeArtifact Domain name.'
+        required: true
+      AWS_ACCOUNT_ID:
+        description: 'AWS Account ID'
+        required: true
+      AWS_ECR_REGISTRY:
+        description: 'ECR Registry Name'
+        required: true
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+    - name: Configure AWS credentials
+
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.AWS_ECR_REGISTRY }}
+        DOCKER_BUILDKIT: "1"
+        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        AWS_CODEARTIFACT_DOMAIN: ${{ secrets.AWS_CODEARTIFACT_DOMAIN }}
+      run: |
+        export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --region $AWS_REGION --domain $AWS_CODEARTIFACT_DOMAIN --domain-owner $AWS_ACCOUNT_ID --query authorizationToken --output text) &&
+        export GIT_BRANCH_SLUG=$(echo "${GITHUB_REF_NAME}" |  tr "[:upper:]" "[:lower:]" | tr -c '[:alnum:]' '-' | sed 's/^-*//' | sed 's/-*$//' | cut -c1-40) &&
+        docker build --build-arg CODEARTIFACT_AUTH_TOKEN="$CODEARTIFACT_AUTH_TOKEN" -t $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA . &&
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA
