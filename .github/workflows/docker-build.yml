@@ -52,4 +52,9 @@ jobs:
         export GIT_BRANCH_SLUG=$(echo "${GITHUB_REF_NAME}" |  tr "[:upper:]" "[:lower:]" | tr -c '[:alnum:]' '-' | sed 's/^-*//' | sed 's/-*$//' | cut -c1-40) &&
         if docker manifest inspect $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA ; then echo "[INFO]: Image already existed. Skipping build step." ; exit 0; fi
         docker build --build-arg CODEARTIFACT_AUTH_TOKEN="$CODEARTIFACT_AUTH_TOKEN" -t $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA . &&
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA
+        if [[ "$RELEASE_NAME" == "" ]];
+        then
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA
+        else
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$RELEASE_NAME
+        fi
