@@ -18,6 +18,9 @@ on:
       AWS_ACCOUNT_ID:
         description: 'AWS Account ID'
         required: true
+env:
+  jdk_url: https://download.java.net/java/GA/jdk18.0.2.1/db379da656dc47308e138f21b33976fa/1/GPL
+  jdk_filename: openjdk-18.0.2.1_linux-x64_bin.tar.gz
 
 jobs:
   publish:
@@ -40,11 +43,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Download JDK
+        run: wget "$jdk_url/$jdk_filename"
+
       - name: Set up JDK 18
         uses: actions/setup-java@v2
         with:
           java-version: 18
-          distribution: 'adopt'
+          distribution: 'jdkfile'
+          jdkFile: ${{ env.jdk_filename }}
 
       - name: Build with Gradle
         run: |
