@@ -48,7 +48,7 @@ jobs:
         AWS_CODEARTIFACT_DOMAIN: ${{ secrets.AWS_CODEARTIFACT_DOMAIN }}
       run: |
         export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --region $AWS_REGION --domain $AWS_CODEARTIFACT_DOMAIN --domain-owner $AWS_ACCOUNT_ID --query authorizationToken --output text) &&
-        export GIT_BRANCH_SLUG=$(echo "${GITHUB_REF_NAME}" |  tr "[:upper:]" "[:lower:]" | tr -c '[:alnum:]' '-' | sed 's/^-*//' | sed 's/-*$//' | cut -c1-25) &&
+        export GIT_BRANCH_SLUG=$(echo "${GITHUB_REF_NAME}" |  tr "[:upper:]" "[:lower:]" | tr -c '[:alnum:]' '-' | sed 's/^-*//' | cut -c1-25 | sed 's/-*$//') &&
         if docker manifest inspect $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA ; then echo "[INFO]: Image already existed. Skipping build step." ; exit 0; fi
         docker build --build-arg CODEARTIFACT_AUTH_TOKEN="$CODEARTIFACT_AUTH_TOKEN" -t $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_BRANCH_SLUG-$GITHUB_SHA . &&
         if [[ "$RELEASE_NAME" == "" ]];
