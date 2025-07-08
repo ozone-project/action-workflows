@@ -1,0 +1,35 @@
+name: Qlty Formater and Metrics
+on:
+  workflow_call:
+
+jobs:
+  qlty:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch master
+        run: git fetch origin ${{ github.event.repository.default_branch }} --prune
+
+      - name: Install Qlty
+        shell: bash
+        run: |
+          curl -fsSL https://qlty.sh | bash
+          echo "$HOME/.qlty/bin" >> $GITHUB_PATH
+
+      - name: Qlty init
+        shell: bash
+        run: qlty install
+
+      - name: Check formatting
+        shell: bash
+        run: qlty check --no-fix --upstream origin/master
+
+      - name: Generate metrics
+        shell: bash
+        run: qlty metrics --functions --upstream origin/master
