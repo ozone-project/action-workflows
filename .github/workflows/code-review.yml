@@ -1,0 +1,61 @@
+name: Code Review for PRs
+
+on:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Claude Code SDK
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Checkout ozone-ai prompts
+        uses: actions/checkout@v4
+        with:
+          repository: ozone-project/ozone-ai
+          ref: AI-23
+          ssh-key: ${{ secrets.OZPR_GH_USER_SSH_PRIVATE_KEY }}
+          path: ozone-ai-temp
+          fetch-depth: 1
+
+      - name: Copy code review prompt
+        run: |
+          mkdir -p code-review-prompts
+          cp ozone-ai-temp/prompts/code-review.md ./code-review-prompts/code-review.md
+          rm -rf ozone-ai-temp
+
+      - name: Run Claude Code Review
+        run: |
+          PR_DIFF=$(git diff origin/${{ github.base_ref }}...HEAD)
+          CLAUDE_CR_PROMPT=$(cat ./code-review-prompts/code-review.md)
+          claude --append-system-prompt "$CLAUDE_CR_PROMPT" \
+            --print "Conduct Code Review:\n\n $PR_DIFF" \
+            > claude-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Comment PR with Claude Code Review
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: claude-code-review
+          path: claude-review.md
