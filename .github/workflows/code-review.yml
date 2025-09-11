@@ -2,6 +2,12 @@ name: Code Review for PRs
 
 on:
   workflow_call:
+    inputs:
+      ignore_patterns:
+        description: 'Newline-separated list of file patterns to exclude from code review (e.g., "*.generated.ts\ndist/**\n*.min.js")'
+        required: false
+        type: string
+        default: ''
     secrets:
       ANTHROPIC_API_KEY:
         required: true
@@ -45,7 +51,27 @@ jobs:
 
       - name: Run Claude Code Review
         run: |
-          PR_DIFF=$(git diff origin/${{ github.base_ref }}...HEAD)
+          # Generate exclude pathspec from ignore patterns
+          PATHSPEC=""
+          if [ -n "${{ inputs.ignore_patterns }}" ]; then
+            echo "Processing ignore patterns..."
+            echo "${{ inputs.ignore_patterns }}" > /tmp/ignore_patterns.txt
+            while IFS= read -r pattern; do
+              if [ -n "$pattern" ]; then
+                echo "Excluding pattern: $pattern"
+                PATHSPEC="$PATHSPEC ':!$pattern'"
+              fi
+            done < /tmp/ignore_patterns.txt
+          fi
+          
+          # Get diff with pathspec exclusions
+          if [ -n "$PATHSPEC" ]; then
+            echo "Using pathspec exclusions: $PATHSPEC"
+            PR_DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- . $PATHSPEC)
+          else
+            PR_DIFF=$(git diff origin/${{ github.base_ref }}...HEAD)
+          fi
+          
           CLAUDE_CR_PROMPT=$(cat ./code-review-prompts/code-review.md)
           claude --append-system-prompt "$CLAUDE_CR_PROMPT" \
             --print "Conduct Code Review:\n\n $PR_DIFF" \
