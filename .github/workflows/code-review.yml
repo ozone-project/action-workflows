@@ -113,6 +113,16 @@ jobs:
           echo -e "$CONTEXT" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
+      - name: Debug - Print Context
+        run: |
+          echo "=== SYSTEM PROMPT ==="
+          echo "$SYSTEM_PROMPT"
+          echo ""
+          echo "=== PR CONTEXT ==="
+          echo "$PR_CONTEXT"
+          echo ""
+          echo "=== END DEBUG ==="
+
       - name: Run Claude Code Review
         run: |
           claude --append-system-prompt "$SYSTEM_PROMPT" \
