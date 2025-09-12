@@ -49,7 +49,7 @@ jobs:
           cp ozone-ai-temp/prompts/code-review.md ./code-review-prompts/code-review.md
           rm -rf ozone-ai-temp
 
-      - name: Run Claude Code Review
+      - name: Prepare context
         run: |
           # Generate exclude pathspec from ignore patterns
           PATHSPEC=""
@@ -72,9 +72,51 @@ jobs:
             PR_DIFF=$(git diff origin/${{ github.base_ref }}...HEAD)
           fi
           
-          CLAUDE_CR_PROMPT=$(cat ./code-review-prompts/code-review.md)
-          claude --append-system-prompt "$CLAUDE_CR_PROMPT" \
-            --print "Conduct Code Review:\n\n $PR_DIFF" \
+          # Get PR description and branch information
+          BRANCH_NAME="${{ github.head_ref }}"
+          
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Get PR description
+            PR_DESCRIPTION=$(curl -s -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.number }}" | \
+              jq -r '.body // ""')
+            
+            # Get unresolved comments from reviews
+            UNRESOLVED_COMMENTS=$(curl -s -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.number }}/reviews" | \
+              jq -r '.[] | select(.state == "CHANGES_REQUESTED" or .state == "COMMENTED") | "Author: \(.user.login)\nComment: \(.body)\n---"' | \
+              head -c 2000)
+          else
+            PR_DESCRIPTION=""
+            UNRESOLVED_COMMENTS=""
+          fi
+          
+          # Build complete context for Claude
+          CONTEXT="Branch: $BRANCH_NAME\n\n"
+          if [ -n "$PR_DESCRIPTION" ] && [ "$PR_DESCRIPTION" != "null" ]; then
+            CONTEXT="${CONTEXT}PR Description:\n$PR_DESCRIPTION\n\n"
+          fi
+          if [ -n "$UNRESOLVED_COMMENTS" ] && [ "$UNRESOLVED_COMMENTS" != "" ]; then
+            CONTEXT="${CONTEXT}Unresolved Comments:\n$UNRESOLVED_COMMENTS\n\n"
+          fi
+          CONTEXT="${CONTEXT}Code Changes:\n$PR_DIFF"
+          
+          # Prepare Claude system prompt
+          SYSTEM_PROMPT=$(cat ./code-review-prompts/code-review.md)
+          
+          # Save to environment
+          echo "SYSTEM_PROMPT<<EOF" >> $GITHUB_ENV
+          echo "$SYSTEM_PROMPT" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          echo "PR_CONTEXT<<EOF" >> $GITHUB_ENV
+          echo -e "$CONTEXT" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Run Claude Code Review
+        run: |
+          claude --append-system-prompt "$SYSTEM_PROMPT" \
+            --print "Conduct Code Review:\n\n$PR_CONTEXT" \
             > claude-review.md
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
