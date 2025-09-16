@@ -18,6 +18,9 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
 
 jobs:
   check-label:
@@ -70,6 +73,8 @@ jobs:
     uses: ./.github/workflows/code-review.yml
     with:
       ignore_patterns: ${{ inputs.ignore_patterns }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   remove-label:
     needs: [check-label, call-code-review]

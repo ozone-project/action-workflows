@@ -8,6 +8,9 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
 
 jobs:
   code-review:
@@ -36,7 +39,6 @@ jobs:
         with:
           repository: ozone-project/ozone-ai
           ref: main
-          ssh-key: ${{ secrets.OZPR_GH_USER_SSH_PRIVATE_KEY }}
           path: ozone-ai-temp
           fetch-depth: 1
 
@@ -67,7 +69,7 @@ jobs:
           # Copy the generated review to expected location
           cp .claude/tmp/review.md claude-review.md
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Comment PR with Claude Code Review
         if: ${{ github.event_name == 'pull_request' }}
