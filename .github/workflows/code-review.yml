@@ -8,9 +8,6 @@ on:
         required: false
         type: string
         default: ''
-    secrets:
-      ANTHROPIC_API_KEY:
-        required: true
 
 jobs:
   code-review:
@@ -70,7 +67,7 @@ jobs:
           # Copy the generated review to expected location
           cp .claude/tmp/review.md claude-review.md
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
 
       - name: Comment PR with Claude Code Review
         if: ${{ github.event_name == 'pull_request' }}
