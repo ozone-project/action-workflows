@@ -1,0 +1,80 @@
+name: Code Review for PRs
+
+on:
+  workflow_call:
+    inputs:
+      ignore_patterns:
+        description: 'Newline-separated list of file patterns to exclude from code review (e.g., "*.generated.ts\ndist/**\n*.min.js")'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Claude Code SDK
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Checkout ozone-ai for Claude Code files
+        uses: actions/checkout@v4
+        with:
+          repository: ozone-project/ozone-ai
+          ref: main
+          ssh-key: ${{ secrets.OZPR_GH_USER_SSH_PRIVATE_KEY }}
+          path: ozone-ai-temp
+          fetch-depth: 1
+
+      - name: Setup Claude Code agents and commands
+        run: |
+          mkdir -p .claude/agents .claude/commands .claude/tmp
+          cp ozone-ai-temp/claude-code/.claude/agents/code-reviewer.md .claude/agents/
+          cp ozone-ai-temp/claude-code/.claude/commands/review-branch.md .claude/commands/
+          rm -rf ozone-ai-temp
+
+      - name: Run Claude Code Review
+        run: |
+          # Determine base branch for comparison
+          BASE_BRANCH="${{ github.base_ref }}"
+          if [ -z "$BASE_BRANCH" ]; then
+            BASE_BRANCH="main"
+          fi
+
+          # Build ignore patterns parameter
+          IGNORE_PARAM=""
+          if [ -n "${{ inputs.ignore_patterns }}" ]; then
+            IGNORE_PARAM=" with ignore_patterns: '${{ inputs.ignore_patterns }}'"
+          fi
+
+          # Run the review-branch command
+          echo "/review-branch against $BASE_BRANCH$IGNORE_PARAM" | claude --print --dangerously-skip-permissions > /dev/null
+
+          # Copy the generated review to expected location
+          cp .claude/tmp/review.md claude-review.md
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Comment PR with Claude Code Review
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: claude-code-review
+          path: claude-review.md

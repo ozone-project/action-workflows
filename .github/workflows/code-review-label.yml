@@ -1,0 +1,107 @@
+name: Label-Based Code Review for PRs
+
+on:
+  workflow_call:
+    inputs:
+      label_name:
+        description: 'Label name that triggers code review'
+        required: false
+        type: string
+        default: 'claude-code-review'
+      remove_label_after_review:
+        description: 'Whether to remove the label after successful code review'
+        required: false
+        type: boolean
+        default: true
+      ignore_patterns:
+        description: 'Newline-separated list of file patterns to exclude from code review (e.g., "*.generated.ts\ndist/**\n*.min.js")'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+jobs:
+  check-label:
+    runs-on: ubuntu-latest
+    outputs:
+      has_label: ${{ steps.check_label.outputs.has_label }}
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Check if label exists on PR
+        id: check_label
+        run: |
+          # Install gh CLI if not available
+          if ! command -v gh &> /dev/null; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt update
+            sudo apt install gh -y
+          fi
+          
+          # Check if PR has the specified label
+          PR_NUMBER="${{ github.event.number }}"
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR number found, skipping label check"
+            echo "has_label=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          LABELS=$(gh pr view $PR_NUMBER --json labels --jq '.labels[].name' || echo "")
+          if echo "$LABELS" | grep -q "^${{ inputs.label_name }}$"; then
+            echo "Label '${{ inputs.label_name }}' found on PR"
+            echo "has_label=true" >> $GITHUB_OUTPUT
+          else
+            echo "Label '${{ inputs.label_name }}' not found on PR"
+            echo "has_label=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  call-code-review:
+    needs: check-label
+    if: needs.check-label.outputs.has_label == 'true'
+    uses: ./.github/workflows/code-review.yml
+    with:
+      ignore_patterns: ${{ inputs.ignore_patterns }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  remove-label:
+    needs: [check-label, call-code-review]
+    if: needs.check-label.outputs.has_label == 'true' && inputs.remove_label_after_review == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Remove label after successful review
+        run: |
+          # Install gh CLI if not available
+          if ! command -v gh &> /dev/null; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt update
+            sudo apt install gh -y
+          fi
+          
+          PR_NUMBER="${{ github.event.number }}"
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr edit $PR_NUMBER --remove-label "${{ inputs.label_name }}"
+            echo "Removed label '${{ inputs.label_name }}' from PR"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
