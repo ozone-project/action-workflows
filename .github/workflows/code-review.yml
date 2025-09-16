@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      GH_USER_SSH_PRIVATE_KEY:
+        required: true
 
 jobs:
   code-review:
@@ -36,9 +41,9 @@ jobs:
         with:
           repository: ozone-project/ozone-ai
           ref: main
-          ssh-key: ${{ secrets.OZPR_GH_USER_SSH_PRIVATE_KEY }}
           path: ozone-ai-temp
           fetch-depth: 1
+          ssh-key: ${{ secrets.GH_USER_SSH_PRIVATE_KEY }}
 
       - name: Setup Claude Code agents and commands
         run: |
@@ -65,13 +70,13 @@ jobs:
           echo "/review-branch against $BASE_BRANCH$IGNORE_PARAM" | claude --print --dangerously-skip-permissions > /dev/null
 
           # Copy the generated review to expected location
-          cp .claude/tmp/review.md claude-review.md
+          cp .claude/tmp/review.md ai-review.md
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Comment PR with Claude Code Review
+      - name: Comment PR with Code Review
         if: ${{ github.event_name == 'pull_request' }}
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: claude-code-review
-          path: claude-review.md
+          header: ai-code-review
+          path: ai-review.md

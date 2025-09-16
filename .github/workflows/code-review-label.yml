@@ -7,7 +7,7 @@ on:
         description: 'Label name that triggers code review'
         required: false
         type: string
-        default: 'claude-code-review'
+        default: 'ai-code-review'
       remove_label_after_review:
         description: 'Whether to remove the label after successful code review'
         required: false
@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      GH_USER_SSH_PRIVATE_KEY:
+        required: true
 
 jobs:
   check-label:
@@ -70,6 +75,9 @@ jobs:
     uses: ./.github/workflows/code-review.yml
     with:
       ignore_patterns: ${{ inputs.ignore_patterns }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GH_USER_SSH_PRIVATE_KEY: ${{ secrets.GH_USER_SSH_PRIVATE_KEY }}
 
   remove-label:
     needs: [check-label, call-code-review]
