@@ -57,7 +57,7 @@ jobs:
           # Determine base branch for comparison
           BASE_BRANCH="${{ github.base_ref }}"
           if [ -z "$BASE_BRANCH" ]; then
-            BASE_BRANCH="main"
+            BASE_BRANCH="master"
           fi
 
           # Build ignore patterns parameter
