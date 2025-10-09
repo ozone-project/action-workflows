@@ -48,8 +48,8 @@ jobs:
       - name: Setup Claude Code agents and commands
         run: |
           mkdir -p .claude/agents .claude/commands .claude/tmp
-          cp ozone-ai-temp/claude-code/.claude/agents/data-pipeline-code-reviewer.md .claude/agents/
-          cp ozone-ai-temp/claude-code/.claude/commands/data-pipeline-review-branch.md .claude/commands/
+          cp ozone-ai-temp/.claude/agents/data-pipeline-code-reviewer.md .claude/agents/
+          cp ozone-ai-temp/.claude/commands/data-pipeline-review-branch.md .claude/commands/
           rm -rf ozone-ai-temp
 
       - name: Run Claude Code Review
@@ -67,7 +67,7 @@ jobs:
           fi
 
           # Run the review-branch command
-          echo "/review-branch against $BASE_BRANCH$IGNORE_PARAM" | claude --print --dangerously-skip-permissions > /dev/null
+          echo "/data-pipeline-review-branch against $BASE_BRANCH$IGNORE_PARAM" | claude --print --dangerously-skip-permissions > /dev/null
 
           # Copy the generated review to expected location
           cp .claude/tmp/review.md ai-review.md
