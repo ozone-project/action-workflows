@@ -47,27 +47,77 @@ jobs:
 
       - name: Setup Claude Code agents and commands
         run: |
+          set -e
+
+          echo "Setting up Claude Code files..."
+
+          # Create required directories
           mkdir -p .claude/agents .claude/commands .claude/tmp
-          cp ozone-ai-temp/claude-code/.claude/agents/code-reviewer.md .claude/agents/
-          cp ozone-ai-temp/claude-code/.claude/commands/review-branch.md .claude/commands/
+
+          # Find and copy the files from the CORRECT location
+          echo "Finding code-reviewer.md..."
+          AGENT_FILE=$(find ozone-ai-temp -name "code-reviewer.md" -type f | head -1)
+          if [ -n "$AGENT_FILE" ]; then
+            echo "Found: $AGENT_FILE"
+            cp "$AGENT_FILE" .claude/agents/
+          else
+            echo "ERROR: Could not find code-reviewer.md in ozone-ai repository"
+            exit 1
+          fi
+
+          echo "Finding review-branch.md..."
+          COMMAND_FILE=$(find ozone-ai-temp -name "review-branch.md" -type f | head -1)
+          if [ -n "$COMMAND_FILE" ]; then
+            echo "Found: $COMMAND_FILE"
+            cp "$COMMAND_FILE" .claude/commands/
+          else
+            echo "ERROR: Could not find review-branch.md in ozone-ai repository"
+            exit 1
+          fi
+
+          # Verify files were copied successfully
+          if [ ! -f ".claude/agents/code-reviewer.md" ] || [ ! -f ".claude/commands/review-branch.md" ]; then
+            echo "ERROR: Failed to copy required files"
+            exit 1
+          fi
+
+          echo "✓ Successfully copied all required files"
+          ls -la .claude/agents/
+          ls -la .claude/commands/
+
+          # Clean up temp directory
           rm -rf ozone-ai-temp
 
       - name: Run Claude Code Review
         run: |
+          set -e
+
           # Determine base branch for comparison
           BASE_BRANCH="${{ github.base_ref }}"
           if [ -z "$BASE_BRANCH" ]; then
             BASE_BRANCH="main"
           fi
 
+          echo "Running code review against base branch: $BASE_BRANCH"
+
           # Build ignore patterns parameter
           IGNORE_PARAM=""
           if [ -n "${{ inputs.ignore_patterns }}" ]; then
             IGNORE_PARAM=" with ignore_patterns: '${{ inputs.ignore_patterns }}'"
+            echo "Using ignore patterns: ${{ inputs.ignore_patterns }}"
           fi
 
           # Run the review-branch command
           echo "/review-branch against $BASE_BRANCH$IGNORE_PARAM" | claude --print --dangerously-skip-permissions > /dev/null
+
+          # Verify review was generated
+          if [ ! -f ".claude/tmp/review.md" ]; then
+            echo "ERROR: Code review failed - review.md was not generated"
+            echo "Check that the Claude Code SDK and API key are properly configured"
+            exit 1
+          fi
+
+          echo "✓ Code review completed successfully"
 
           # Copy the generated review to expected location
           cp .claude/tmp/review.md ai-review.md
