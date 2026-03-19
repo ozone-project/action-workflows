@@ -75,7 +75,7 @@ jobs:
 
           # In CI -p mode, AskUserQuestion is unavailable.
           # Instruct Claude to post the review directly without approval gate.
-          PROMPT="$PROMPT -- This is an automated CI review. Post the review directly without asking for approval. Do not use AskUserQuestion."
+          PROMPT="$PROMPT -- This is an automated CI review. Post the review directly without asking for approval. Do not use AskUserQuestion. Prefix each inline comment body with its severity: [blocker], [major], or [minor]."
 
           # Request a debug report so we can diagnose CI review issues from artifacts.
           PROMPT="$PROMPT -- After the review is complete (whether it succeeds, fails, or finds no issues), write a debug report to 'code-review-report.md' containing: PR number and branches reviewed, number of files in the diff, number of issues found (blockers, majors, minors), verdict (APPROVE/COMMENT/REQUEST_CHANGES), whether the review was posted successfully (and the URL if so), any errors encountered during the process, the full list of issues/findings discovered (for each: type, file, line, description), the complete contents of the review payload JSON passed to post-review.py (especially the comments array), the full stdout and stderr output from post-review.py, and how many inline comments were in the payload vs how many GitHub confirmed as posted."
