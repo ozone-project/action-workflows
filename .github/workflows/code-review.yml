@@ -57,6 +57,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.CODE_REVIEW_GH_TOKEN }}
           BASE_BRANCH: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
         run: |
           set -e
@@ -67,7 +68,7 @@ jobs:
 
           echo "Running code review against base branch: $BASE_BRANCH"
 
-          PROMPT="/check-pr against $BASE_BRANCH"
+          PROMPT="/check-pr $PR_NUMBER against $BASE_BRANCH"
 
           if [ -n "$IGNORE_PATTERNS" ]; then
             PROMPT="$PROMPT -- Ignore these file patterns: $IGNORE_PATTERNS."
