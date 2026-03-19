@@ -77,4 +77,16 @@ jobs:
           # Instruct Claude to post the review directly without approval gate.
           PROMPT="$PROMPT -- This is an automated CI review. Post the review directly without asking for approval. Do not use AskUserQuestion."
 
+          # Request a debug report so we can diagnose CI review issues from artifacts.
+          PROMPT="$PROMPT -- After the review is complete (whether it succeeds, fails, or finds no issues), write a debug report to 'code-review-report.md' containing: PR number and branches reviewed, number of files in the diff, number of issues found (blockers, majors, minors), verdict (APPROVE/COMMENT/REQUEST_CHANGES), whether the review was posted successfully (and the URL if so), and any errors encountered during the process."
+
           echo "$PROMPT" | claude -p --dangerously-skip-permissions --plugin-dir ./synapse-temp/plugins/core
+
+      - name: Upload review report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review-report
+          retention-days: 7
+          if-no-files-found: warn
+          path: code-review-report.md
