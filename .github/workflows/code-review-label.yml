@@ -21,7 +21,9 @@ on:
     secrets:
       CODE_REVIEW_ANTHROPIC_API_KEY:
         required: true
-      CODE_REVIEW_GH_TOKEN:
+      CODE_REVIEW_APP_ID:
+        required: true
+      CODE_REVIEW_APP_PRIVATE_KEY:
         required: true
 
 jobs:
@@ -34,10 +36,17 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CODE_REVIEW_APP_ID }}
+          private-key: ${{ secrets.CODE_REVIEW_APP_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.CODE_REVIEW_GH_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Check if label exists on PR
         id: check_label
@@ -67,7 +76,7 @@ jobs:
             echo "has_label=false" >> $GITHUB_OUTPUT
           fi
         env:
-          GH_TOKEN: ${{ secrets.CODE_REVIEW_GH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
   call-code-review:
     needs: check-label
@@ -77,7 +86,8 @@ jobs:
       ignore_patterns: ${{ inputs.ignore_patterns }}
     secrets:
       CODE_REVIEW_ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
-      CODE_REVIEW_GH_TOKEN: ${{ secrets.CODE_REVIEW_GH_TOKEN }}
+      CODE_REVIEW_APP_ID: ${{ secrets.CODE_REVIEW_APP_ID }}
+      CODE_REVIEW_APP_PRIVATE_KEY: ${{ secrets.CODE_REVIEW_APP_PRIVATE_KEY }}
 
   remove-label:
     needs: [check-label, call-code-review]
@@ -88,6 +98,13 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CODE_REVIEW_APP_ID }}
+          private-key: ${{ secrets.CODE_REVIEW_APP_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -107,4 +124,4 @@ jobs:
             echo "Removed label '${{ inputs.label_name }}' from PR"
           fi
         env:
-          GH_TOKEN: ${{ secrets.CODE_REVIEW_GH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
