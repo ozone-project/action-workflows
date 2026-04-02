@@ -98,8 +98,22 @@ jobs:
           # Instruct Claude to post the review directly without approval gate.
           PROMPT="$PROMPT -- This is an automated CI review. Post the review directly without asking for approval. Do not use AskUserQuestion."
 
-          # Request a debug report so we can diagnose CI review issues from artifacts.
-          PROMPT="$PROMPT -- After the review is complete (whether it succeeds, fails, or finds no issues), write a debug report to 'code-review-report.md' containing: PR number and branches reviewed, number of files in the diff, number of issues found (blockers, majors, minors), verdict (APPROVE/COMMENT/REQUEST_CHANGES), whether the review was posted successfully (and the URL if so), any errors encountered during the process, the full list of issues/findings discovered (for each: type, file, line, description), the complete contents of the review payload JSON passed to post-review.py (especially the comments array), the full stdout and stderr output from post-review.py, and how many inline comments were in the payload vs how many GitHub confirmed as posted."
+          # Request a structured JSON debug report.
+          read -r -d '' REPORT_TEMPLATE << 'TMPL' || true
+          After the review is complete (whether it succeeds, fails, or finds no issues), write a JSON debug report to 'code-review-report.json' with this schema:
+          {
+            "overview": { "timestamp": "", "prNumber": 0, "repository": "", "baseBranch": "", "headBranch": "", "filesInDiff": 0, "minSeverity": "", "verdict": "", "evaluationMessage": "", "reviewPosted": false, "reviewUrl": "" },
+            "summary": "",
+            "fileManifest": [{ "file": "", "depth": "", "depthReason": "", "linesChanged": 0, "checks": { "security": "", "correctness": "", "errorHandling": "", "performance": "", "tests": "", "simplicity": "" }, "conventions": [{ "name": "", "result": "" }] }],
+            "findings": { "blockers": [{ "file": "", "line": 0, "category": "", "description": "", "suggestion": "" }], "majors": [], "minors": [] },
+            "qualityGate": [{ "finding": "", "file": "", "line": 0, "actionable": true, "accurate": true, "confident": true, "comment": "" }],
+            "crossFileAnalysis": [],
+            "postingDiagnostics": { "payloadComments": 0, "githubConfirmed": 0, "exitCode": 0, "stdout": "", "stderr": "" },
+            "errors": []
+          }
+          Fill every field from the structured JSON review data. Use empty arrays for sections with no data, never omit fields.
+          TMPL
+          PROMPT="$PROMPT -- $REPORT_TEMPLATE"
 
           echo "$PROMPT" | claude -p --dangerously-skip-permissions --plugin-dir ./synapse-temp/plugins/core
 
@@ -110,4 +124,4 @@ jobs:
           name: code-review-report
           retention-days: 7
           if-no-files-found: warn
-          path: code-review-report.md
+          path: code-review-report.json
