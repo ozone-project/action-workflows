@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ''
+      min_severity:
+        description: 'Minimum severity to include in review output: "minor" (all findings), "major" (blockers + majors), "blocker" (blockers only)'
+        required: false
+        type: string
+        default: 'minor'
     secrets:
       CODE_REVIEW_ANTHROPIC_API_KEY:
         required: true
@@ -69,6 +74,7 @@ jobs:
           BASE_BRANCH: ${{ github.base_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
+          MIN_SEVERITY: ${{ inputs.min_severity }}
         run: |
           set -e
 
@@ -79,6 +85,10 @@ jobs:
           echo "Running code review against base branch: $BASE_BRANCH"
 
           PROMPT="/check-pr $PR_NUMBER against $BASE_BRANCH --severity"
+
+          if [ -n "$MIN_SEVERITY" ] && [ "$MIN_SEVERITY" != "minor" ]; then
+            PROMPT="$PROMPT --min-severity $MIN_SEVERITY"
+          fi
 
           if [ -n "$IGNORE_PATTERNS" ]; then
             PROMPT="$PROMPT -- Ignore these file patterns: $IGNORE_PATTERNS."
