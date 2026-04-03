@@ -96,7 +96,7 @@ jobs:
 
           # In CI -p mode, AskUserQuestion is unavailable.
           # Instruct Claude to post the review directly without approval gate.
-          PROMPT="$PROMPT -- This is an automated CI review. Post the review directly without asking for approval. Do not use AskUserQuestion."
+          PROMPT="$PROMPT -- This is an automated CI review. Post the review directly without asking for approval. Do not use AskUserQuestion. NEVER post test, diagnostic, or probe reviews to the PR. If post-review.py fails, report the error in the debug report and stop. Do not attempt to work around posting failures by calling gh api directly."
 
           # Request a structured JSON debug report.
           read -r -d '' REPORT_TEMPLATE << 'TMPL' || true
