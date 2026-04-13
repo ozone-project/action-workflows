@@ -107,11 +107,12 @@ jobs:
             "fileManifest": [{ "file": "", "depth": "", "depthReason": "", "linesChanged": 0, "checks": { "security": "", "correctness": "", "errorHandling": "", "performance": "", "tests": "", "simplicity": "" }, "conventions": [{ "name": "", "result": "" }] }],
             "findings": { "blockers": [{ "file": "", "line": 0, "category": "", "description": "", "suggestion": "" }], "majors": [], "minors": [] },
             "qualityGate": [{ "finding": "", "file": "", "line": 0, "actionable": true, "accurate": true, "confident": true, "comment": "" }],
+            "findingDispositions": [{ "file": "", "line": 0, "severity": "", "description": "", "disposition": "posted|merged-duplicate|existing-comment-dedup|quality-filtered|not-in-diff", "reason": "" }],
             "crossFileAnalysis": [],
-            "postingDiagnostics": { "payloadComments": 0, "githubConfirmed": 0, "exitCode": 0, "stdout": "", "stderr": "" },
+            "postingDiagnostics": { "payloadComments": 0, "githubConfirmed": 0, "commentsSkippedNotInDiff": 0, "exitCode": 0, "stdout": "", "stderr": "" },
             "errors": []
           }
-          Fill every field from the structured JSON review data. Use empty arrays for sections with no data, never omit fields.
+          Fill every field from the structured JSON review data. Use empty arrays for sections with no data, never omit fields. Every finding in the findings arrays MUST have exactly one corresponding entry in findingDispositions.
           TMPL
           PROMPT="$PROMPT -- $REPORT_TEMPLATE"
 
