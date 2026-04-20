@@ -25,6 +25,10 @@ on:
         required: true
       CODE_REVIEW_APP_PRIVATE_KEY:
         required: true
+      VMETRICS_PUSH_URL:
+        required: false
+      VMETRICS_PUSH_TOKEN:
+        required: false
 
 jobs:
   check-label:
@@ -89,6 +93,8 @@ jobs:
       CODE_REVIEW_ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
       CODE_REVIEW_APP_ID: ${{ secrets.CODE_REVIEW_APP_ID }}
       CODE_REVIEW_APP_PRIVATE_KEY: ${{ secrets.CODE_REVIEW_APP_PRIVATE_KEY }}
+      VMETRICS_PUSH_URL: ${{ secrets.VMETRICS_PUSH_URL }}
+      VMETRICS_PUSH_TOKEN: ${{ secrets.VMETRICS_PUSH_TOKEN }}
 
   remove-label:
     needs: [check-label, call-code-review]

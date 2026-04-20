@@ -20,6 +20,10 @@ on:
         required: true
       CODE_REVIEW_APP_PRIVATE_KEY:
         required: true
+      VMETRICS_PUSH_URL:
+        required: false
+      VMETRICS_PUSH_TOKEN:
+        required: false
 
 jobs:
   code-review:
@@ -68,6 +72,8 @@ jobs:
           ln -s "$(which python3)" ~/.synapse/.venv/bin/python3
 
       - name: Run code review
+        id: review
+        timeout-minutes: 30
         env:
           ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -76,7 +82,7 @@ jobs:
           IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
           MIN_SEVERITY: ${{ inputs.min_severity }}
         run: |
-          set -e
+          set -eo pipefail
 
           if [ -z "$BASE_BRANCH" ]; then
             BASE_BRANCH="main"
@@ -116,7 +122,141 @@ jobs:
           TMPL
           PROMPT="$PROMPT -- $REPORT_TEMPLATE"
 
-          echo "$PROMPT" | claude -p --dangerously-skip-permissions --plugin-dir ./synapse-temp/plugins/core
+          set +e
+          echo "$PROMPT" | claude -p --dangerously-skip-permissions --output-format json --plugin-dir ./synapse-temp/plugins/core > claude-output.json
+          CLAUDE_EXIT=$?
+          set -e
+
+          # Print run summary (cost, duration, turns) without the full conversation
+          if [ -f claude-output.json ]; then
+            jq 'del(.result)' claude-output.json 2>/dev/null || echo "Warning: could not parse claude-output.json"
+          fi
+
+          echo "claude_exit_code=$CLAUDE_EXIT" >> "$GITHUB_OUTPUT"
+
+          if [ $CLAUDE_EXIT -ne 0 ]; then
+            echo "::error::Claude exited with code $CLAUDE_EXIT"
+            exit $CLAUDE_EXIT
+          fi
+
+      - name: Push review metrics
+        if: always()
+        env:
+          VMETRICS_PUSH_URL: ${{ secrets.VMETRICS_PUSH_URL }}
+          VMETRICS_PUSH_TOKEN: ${{ secrets.VMETRICS_PUSH_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          CLAUDE_EXIT_CODE: ${{ steps.review.outputs.claude_exit_code }}
+        run: |
+          # Skip if VictoriaMetrics not configured
+          if [ -z "$VMETRICS_PUSH_URL" ] || [ -z "$VMETRICS_PUSH_TOKEN" ]; then
+            echo "VictoriaMetrics secrets not configured, skipping metrics push"
+            exit 0
+          fi
+
+          METRICS=""
+
+          # --- Cost & Performance metrics from claude-output.json ---
+          if [ -f claude-output.json ]; then
+            COST=$(jq -r '.total_cost_usd // empty' claude-output.json 2>/dev/null)
+            if [ -n "$COST" ]; then
+              METRICS="${METRICS}gh_code_reviewer_cost_usd{repository=\"${REPOSITORY}\"} ${COST}\n"
+            fi
+
+            TURNS=$(jq -r '.num_turns // empty' claude-output.json 2>/dev/null)
+            if [ -n "$TURNS" ]; then
+              METRICS="${METRICS}gh_code_reviewer_turns{repository=\"${REPOSITORY}\"} ${TURNS}\n"
+            fi
+
+            # Duration: claude phase (ms -> seconds)
+            DURATION_MS=$(jq -r '.duration_ms // empty' claude-output.json 2>/dev/null)
+            if [ -n "$DURATION_MS" ]; then
+              DURATION_S=$(awk "BEGIN {printf \"%.3f\", $DURATION_MS / 1000}")
+              METRICS="${METRICS}gh_code_reviewer_duration_seconds{repository=\"${REPOSITORY}\",phase=\"claude\"} ${DURATION_S}\n"
+            fi
+
+            # Duration: API phase (ms -> seconds)
+            API_DURATION_MS=$(jq -r '.duration_api_ms // empty' claude-output.json 2>/dev/null)
+            if [ -n "$API_DURATION_MS" ]; then
+              API_DURATION_S=$(awk "BEGIN {printf \"%.3f\", $API_DURATION_MS / 1000}")
+              METRICS="${METRICS}gh_code_reviewer_duration_seconds{repository=\"${REPOSITORY}\",phase=\"api\"} ${API_DURATION_S}\n"
+            fi
+
+            # Duration: total workflow (from GITHUB_RUN_STARTED_AT to now)
+            if [ -n "$GITHUB_RUN_STARTED_AT" ]; then
+              START_EPOCH=$(date -d "$GITHUB_RUN_STARTED_AT" +%s 2>/dev/null || true)
+              NOW_EPOCH=$(date +%s)
+              if [ -n "$START_EPOCH" ]; then
+                TOTAL_DURATION=$((NOW_EPOCH - START_EPOCH))
+                METRICS="${METRICS}gh_code_reviewer_duration_seconds{repository=\"${REPOSITORY}\",phase=\"total\"} ${TOTAL_DURATION}\n"
+              fi
+            fi
+
+            # Token usage
+            for TOKEN_TYPE in input output cache_read cache_creation; do
+              VALUE=$(jq -r ".usage.${TOKEN_TYPE}_tokens // empty" claude-output.json 2>/dev/null)
+              if [ -n "$VALUE" ]; then
+                METRICS="${METRICS}gh_code_reviewer_tokens{repository=\"${REPOSITORY}\",type=\"${TOKEN_TYPE}\"} ${VALUE}\n"
+              fi
+            done
+          fi
+
+          # --- Review Quality metrics from code-review-report.json ---
+          if [ -f code-review-report.json ]; then
+            # Finding counts by severity
+            for SEVERITY in blocker major minor; do
+              COUNT=$(jq -r "[(.findingDispositions // [])[] | select(.severity == \"${SEVERITY}\" and .disposition == \"posted\")] | length" code-review-report.json 2>/dev/null)
+              if [ -n "$COUNT" ] && [ "$COUNT" != "null" ]; then
+                METRICS="${METRICS}gh_code_reviewer_findings{repository=\"${REPOSITORY}\",severity=\"${SEVERITY}\",posted=\"true\"} ${COUNT}\n"
+              fi
+              COUNT=$(jq -r "[(.findingDispositions // [])[] | select(.severity == \"${SEVERITY}\" and .disposition != \"posted\")] | length" code-review-report.json 2>/dev/null)
+              if [ -n "$COUNT" ] && [ "$COUNT" != "null" ]; then
+                METRICS="${METRICS}gh_code_reviewer_findings{repository=\"${REPOSITORY}\",severity=\"${SEVERITY}\",posted=\"false\"} ${COUNT}\n"
+              fi
+            done
+
+            # Verdict (info metric, value always 1)
+            VERDICT=$(jq -r '.overview.verdict // empty' code-review-report.json 2>/dev/null)
+            if [ -n "$VERDICT" ]; then
+              METRICS="${METRICS}gh_code_reviewer_verdict_info{repository=\"${REPOSITORY}\",verdict=\"${VERDICT}\"} 1\n"
+            fi
+
+            # PR scope
+            FILES_IN_DIFF=$(jq -r '.overview.filesInDiff // empty' code-review-report.json 2>/dev/null)
+            if [ -n "$FILES_IN_DIFF" ]; then
+              METRICS="${METRICS}gh_code_reviewer_files_in_diff{repository=\"${REPOSITORY}\"} ${FILES_IN_DIFF}\n"
+            fi
+
+            # Lines changed grouped by depth
+            while IFS=$'\t' read -r DEPTH LINES; do
+              [ -z "$DEPTH" ] && continue
+              METRICS="${METRICS}gh_code_reviewer_lines_changed{repository=\"${REPOSITORY}\",depth=\"${DEPTH}\"} ${LINES}\n"
+            done < <(jq -r '(.fileManifest // []) | group_by(.depth) | .[] | "\(.[0].depth // "unknown")\t\([.[].linesChanged // 0] | add // 0)"' code-review-report.json 2>/dev/null)
+
+            ERROR_COUNT=$(jq -r '(.errors | length) // 0' code-review-report.json 2>/dev/null)
+            if [ -n "$ERROR_COUNT" ]; then
+              METRICS="${METRICS}gh_code_reviewer_errors{repository=\"${REPOSITORY}\"} ${ERROR_COUNT}\n"
+            fi
+          fi
+
+          # Exit code metric (available even if claude-output.json is missing)
+          EXIT_CODE="${CLAUDE_EXIT_CODE:-1}"
+          METRICS="${METRICS}gh_code_reviewer_exit_code{repository=\"${REPOSITORY}\"} ${EXIT_CODE}\n"
+
+          # Push to VictoriaMetrics
+          if [ -z "$METRICS" ]; then
+            echo "No metrics collected, skipping push"
+            exit 0
+          fi
+
+          echo "Pushing metrics to VictoriaMetrics..."
+          printf '%b' "$METRICS" | curl --silent --show-error --max-time 10 \
+            -X POST \
+            -H "Authorization: Bearer ${VMETRICS_PUSH_TOKEN}" \
+            -H "Content-Type: text/plain" \
+            --data-binary @- \
+            "${VMETRICS_PUSH_URL}" || echo "Warning: metrics push failed"
+
+          echo "Metrics push complete"
 
       - name: Upload review report
         if: always()
@@ -125,4 +265,6 @@ jobs:
           name: code-review-report
           retention-days: 7
           if-no-files-found: warn
-          path: code-review-report.json
+          path: |
+            code-review-report.json
+            claude-output.json

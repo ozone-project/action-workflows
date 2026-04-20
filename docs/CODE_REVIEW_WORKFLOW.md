@@ -31,7 +31,10 @@ File ignore patterns are supported to exclude generated or vendored files from r
 Add these secrets at the organization or repository level:
 
 - `CODE_REVIEW_ANTHROPIC_API_KEY` - Anthropic API key
-- `CODE_REVIEW_GH_TOKEN` - GitHub token with PR write permissions and read access to `ozone-project/synapse`
+- `CODE_REVIEW_APP_ID` - GitHub App ID for PR access
+- `CODE_REVIEW_APP_PRIVATE_KEY` - GitHub App private key
+- `VMETRICS_PUSH_URL` - (Optional) VictoriaMetrics push endpoint for review metrics
+- `VMETRICS_PUSH_TOKEN` - (Optional) Bearer token for VictoriaMetrics authentication
 
 ### 2. Use the Workflow
 
@@ -72,6 +75,67 @@ repo/
     │   ├── check-pr/          # PR review orchestration
     │   └── comment-pr/        # Comment formatting + post-review.py
     └── commands/
+```
+
+## Observability
+
+When `VMETRICS_PUSH_URL` and `VMETRICS_PUSH_TOKEN` secrets are configured, the workflow pushes review metrics to VictoriaMetrics in Prometheus text exposition format. Metrics push is best-effort and never fails the workflow.
+
+### Metrics
+
+All metrics include a `repository` label. Several also carry a second dimension label (`phase`, `type`, `severity`, or `verdict`) as shown below.
+
+**Cost & Performance:**
+- `gh_code_reviewer_cost_usd` - Claude API cost per review
+- `gh_code_reviewer_duration_seconds{phase="total|claude|api"}` - Wall-clock, Claude, and API durations
+- `gh_code_reviewer_turns` - Number of Claude conversation turns
+- `gh_code_reviewer_tokens{type="input|output|cache_read|cache_creation"}` - Token breakdown
+
+**Review Quality:**
+- `gh_code_reviewer_findings{severity="blocker|major|minor",posted="true|false"}` - Finding counts by severity and posting status
+- `gh_code_reviewer_verdict_info{verdict="..."}` - Review verdict (info metric, always 1)
+
+**PR Scope:**
+- `gh_code_reviewer_files_in_diff` - Number of files in the PR diff
+- `gh_code_reviewer_lines_changed{depth="..."}` - Lines changed per file-depth group
+
+**Posting:**
+- `gh_code_reviewer_errors` - Number of errors during the review
+- `gh_code_reviewer_exit_code` - Claude process exit code
+
+### Enabling Metrics
+
+Add the secrets to your organization or repository, then pass them to the workflow:
+
+```yaml
+jobs:
+  review:
+    uses: ozone-project/action-workflows/.github/workflows/code-review.yml@master
+    secrets:
+      CODE_REVIEW_ANTHROPIC_API_KEY: ${{ secrets.CODE_REVIEW_ANTHROPIC_API_KEY }}
+      CODE_REVIEW_APP_ID: ${{ secrets.CODE_REVIEW_APP_ID }}
+      CODE_REVIEW_APP_PRIVATE_KEY: ${{ secrets.CODE_REVIEW_APP_PRIVATE_KEY }}
+      VMETRICS_PUSH_URL: ${{ secrets.VMETRICS_PUSH_URL }}
+      VMETRICS_PUSH_TOKEN: ${{ secrets.VMETRICS_PUSH_TOKEN }}
+```
+
+Without the secrets, the metrics step is skipped and the workflow behaves identically to before.
+
+### Artifacts
+
+The workflow uploads `claude-output.json` alongside `code-review-report.json` as a 7-day retention artifact. This contains Claude's full output envelope (cost, tokens, duration) and can be used for per-PR debugging.
+
+### Example Queries
+
+```promql
+# Average review cost over 7 days
+avg_over_time(gh_code_reviewer_cost_usd{repository="ozone-project/foo"}[7d])
+
+# Review duration trend
+gh_code_reviewer_duration_seconds{repository="ozone-project/foo",phase="total"}
+
+# Finding rate by severity
+sum by (severity) (gh_code_reviewer_findings{repository="ozone-project/foo"})
 ```
 
 ## Troubleshooting
