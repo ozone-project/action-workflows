@@ -25,8 +25,13 @@ on:
       VMETRICS_PUSH_TOKEN:
         required: false
 
+concurrency:
+  group: code-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   code-review:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     permissions:
       contents: read
