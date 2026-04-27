@@ -1,0 +1,26 @@
+name: Code Review (Org Required)
+
+# Standalone workflow for use as an organisation ruleset required workflow.
+# Register at: Enterprise/Org Settings > Rulesets > Required workflows
+# Point to: ozone-project/action-workflows/.github/workflows/code-review-org-required.yml@master
+#
+# Per-repo config: add .github/code-review.yml in the target repo to set
+# min_severity and ignore_patterns (see code-review.yml for supported values).
+#
+# Secrets required at org level:
+#   CODE_REVIEW_ANTHROPIC_API_KEY, CODE_REVIEW_APP_ID, CODE_REVIEW_APP_PRIVATE_KEY
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  merge_group:
+    types: [checks_requested]
+
+concurrency:
+  group: code-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    uses: ozone-project/action-workflows/.github/workflows/code-review.yml@master
+    secrets: inherit
