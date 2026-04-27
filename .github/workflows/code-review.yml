@@ -52,6 +52,45 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Read repo code-review config
+        id: review-config
+        run: |
+          if [ ! -f ".github/code-review.yml" ]; then
+            echo "No .github/code-review.yml found, using workflow inputs"
+            echo "min_severity=" >> "$GITHUB_OUTPUT"
+            echo "ignore_patterns=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Found .github/code-review.yml"
+
+          MIN_SEVERITY=$(python3 -c "
+import yaml
+with open('.github/code-review.yml') as f:
+    c = yaml.safe_load(f) or {}
+v = str(c.get('min_severity', '')).strip()
+if v in ('minor', 'major', 'blocker'): print(v)
+" 2>&1) || { echo "Warning: failed to parse min_severity from .github/code-review.yml: $MIN_SEVERITY"; MIN_SEVERITY=""; }
+
+          IGNORE_PATTERNS=$(python3 -c "
+import yaml
+with open('.github/code-review.yml') as f:
+    c = yaml.safe_load(f) or {}
+patterns = c.get('ignore_patterns', [])
+if isinstance(patterns, list):
+    print('\n'.join(str(p) for p in patterns))
+elif isinstance(patterns, str):
+    print(patterns.strip())
+" 2>&1) || { echo "Warning: failed to parse ignore_patterns from .github/code-review.yml: $IGNORE_PATTERNS"; IGNORE_PATTERNS=""; }
+
+          echo "min_severity=$MIN_SEVERITY" >> "$GITHUB_OUTPUT"
+          DELIM=$(openssl rand -hex 8)
+          {
+            echo "ignore_patterns<<$DELIM"
+            echo "$IGNORE_PATTERNS"
+            echo "$DELIM"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -84,8 +123,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BASE_BRANCH: ${{ github.base_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
-          MIN_SEVERITY: ${{ inputs.min_severity }}
+          IGNORE_PATTERNS: ${{ steps.review-config.outputs.ignore_patterns || inputs.ignore_patterns }}
+          MIN_SEVERITY: ${{ steps.review-config.outputs.min_severity || inputs.min_severity }}
         run: |
           set -eo pipefail
 
