@@ -1,8 +1,7 @@
-name: Code Review (Org Required)
+name: Code Review
 
-# Standalone workflow for use as an organisation ruleset required workflow.
-# Register at: Enterprise/Org Settings > Rulesets > Required workflows
-# Point to: ozone-project/action-workflows/.github/workflows/code-review-org-required.yml@master
+# Standalone PR-triggered code review workflow. Provides advisory suggestions only;
+# not intended to be wired up as a required status check.
 #
 # Per-repo config: add .github/code-review.yml in the target repo to set
 # min_severity and ignore_patterns (see code-review.yml for supported values).
@@ -13,8 +12,6 @@ name: Code Review (Org Required)
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  merge_group:
-    types: [checks_requested]
 
 concurrency:
   group: code-review-${{ github.event.pull_request.number || github.ref }}
