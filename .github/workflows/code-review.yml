@@ -64,24 +64,9 @@ jobs:
 
           echo "Found .github/code-review.yml"
 
-          MIN_SEVERITY=$(python3 -c "
-import yaml
-with open('.github/code-review.yml') as f:
-    c = yaml.safe_load(f) or {}
-v = str(c.get('min_severity', '')).strip()
-if v in ('minor', 'major', 'blocker'): print(v)
-" 2>&1) || { echo "Warning: failed to parse min_severity from .github/code-review.yml: $MIN_SEVERITY"; MIN_SEVERITY=""; }
+          MIN_SEVERITY=$(python3 -c "import yaml; c = yaml.safe_load(open('.github/code-review.yml')) or {}; v = str(c.get('min_severity', '')).strip(); print(v if v in ('minor', 'major', 'blocker') else '')" 2>&1) || { echo "Warning: failed to parse min_severity from .github/code-review.yml: $MIN_SEVERITY"; MIN_SEVERITY=""; }
 
-          IGNORE_PATTERNS=$(python3 -c "
-import yaml
-with open('.github/code-review.yml') as f:
-    c = yaml.safe_load(f) or {}
-patterns = c.get('ignore_patterns', [])
-if isinstance(patterns, list):
-    print('\n'.join(str(p) for p in patterns))
-elif isinstance(patterns, str):
-    print(patterns.strip())
-" 2>&1) || { echo "Warning: failed to parse ignore_patterns from .github/code-review.yml: $IGNORE_PATTERNS"; IGNORE_PATTERNS=""; }
+          IGNORE_PATTERNS=$(python3 -c "import yaml; c = yaml.safe_load(open('.github/code-review.yml')) or {}; p = c.get('ignore_patterns', []); print('\n'.join(str(x) for x in p) if isinstance(p, list) else (p.strip() if isinstance(p, str) else ''))" 2>&1) || { echo "Warning: failed to parse ignore_patterns from .github/code-review.yml: $IGNORE_PATTERNS"; IGNORE_PATTERNS=""; }
 
           echo "min_severity=$MIN_SEVERITY" >> "$GITHUB_OUTPUT"
           DELIM=$(openssl rand -hex 8)
